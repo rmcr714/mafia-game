@@ -1,0 +1,603 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap');
+
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0f;
+  --bg2: #111118;
+  --bg3: #18181f;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --text: #e8e6e0;
+  --text2: #8a887f;
+  --text3: #5a5850;
+  --accent: #c9a84c;
+  --accent2: #8b6914;
+  --red: #c0392b;
+  --green: #27ae60;
+  --radius: 12px;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* Subtle noise texture on body */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Screen ── */
+.screen {
+  position: relative;
+  min-height: 100vh;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  z-index: 1;
+}
+
+.screen.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  text-align: center;
+}
+
+/* ── Logo Area ── */
+.logo-area {
+  margin-bottom: 40px;
+}
+
+.logo-area.small {
+  margin-bottom: 28px;
+}
+
+.logo-icon {
+  font-size: 56px;
+  margin-bottom: 12px;
+  display: block;
+  filter: drop-shadow(0 0 20px rgba(201,168,76,0.3));
+}
+
+.logo-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 56px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+  text-shadow: 0 0 40px rgba(201,168,76,0.2);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.logo-sub {
+  color: var(--text2);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+/* ── Buttons ── */
+.btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 300px;
+  margin-bottom: 36px;
+}
+
+.btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px;
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  gap: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #1a1206;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #d9b85c;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(201,168,76,0.25);
+}
+
+.btn-secondary {
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border2);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border2);
+}
+
+.btn-outline:hover {
+  border-color: var(--text2);
+  color: var(--text);
+}
+
+.btn.full { width: 100%; }
+
+.btn-hint {
+  font-size: 11px;
+  opacity: 0.65;
+  font-weight: 300;
+}
+
+/* ── Roles Preview ── */
+.roles-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 320px;
+}
+
+.role-chip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid;
+  font-weight: 500;
+}
+
+/* ── Form ── */
+.form {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.input-group label {
+  font-size: 12px;
+  color: var(--text2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.input {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  padding: 12px 16px;
+  outline: none;
+  transition: border-color 0.2s;
+  letter-spacing: 0.05em;
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.input::placeholder { color: var(--text3); }
+
+.error {
+  color: #e74c3c;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ── Back button ── */
+.back-btn {
+  position: absolute;
+  top: 24px;
+  left: 20px;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+.back-btn:hover { color: var(--text); }
+
+/* ── God Screen ── */
+.god-header {
+  padding: 24px 0 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.god-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(201,168,76,0.1);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 20px;
+  padding: 4px 12px;
+  margin-bottom: 16px;
+}
+
+.room-code-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+
+.room-code-label {
+  font-size: 12px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+
+.room-code-val {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.2em;
+  flex: 1;
+}
+
+.copy-btn {
+  background: var(--accent);
+  color: #1a1206;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover { background: #d9b85c; }
+
+.share-hint {
+  font-size: 12px;
+  color: var(--text3);
+  text-align: center;
+}
+
+/* ── Player list ── */
+.section-title {
+  font-size: 12px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.player-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.player-chip.me {
+  border-color: var(--accent);
+}
+
+.player-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--green);
+}
+
+.you-tag {
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+}
+
+.empty-hint {
+  color: var(--text3);
+  font-size: 13px;
+  margin-bottom: 24px;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.assign-btn { margin-top: 8px; }
+
+/* ── God role view ── */
+.team-block {
+  margin-bottom: 24px;
+}
+
+.team-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.mafia-label { color: var(--red); }
+.town-label  { color: var(--green); }
+
+.god-player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left: 3px solid;
+  margin-bottom: 8px;
+}
+
+.god-player-name {
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.god-player-role {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.player-row-waiting {
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+/* ── Waiting screen ── */
+.room-pill {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 24px;
+}
+
+.room-pill strong { color: var(--accent); }
+
+.waiting-players {
+  width: 100%;
+  max-width: 300px;
+  text-align: left;
+}
+
+.waiting-players .section-title { text-align: center; }
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.pulse { animation: pulse 2s ease-in-out infinite; display: block; }
+
+/* ── Role Reveal Screen ── */
+.role-screen {
+  background: radial-gradient(ellipse at center, rgba(var(--role-color), 0.05) 0%, transparent 70%);
+}
+
+.role-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  padding: 32px 24px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.role-greeting {
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.role-greeting strong { color: var(--text); }
+
+.role-emoji-big {
+  font-size: 72px;
+  line-height: 1;
+  filter: drop-shadow(0 0 20px var(--role-color));
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+.role-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 30px currentColor;
+}
+
+.role-team-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 14px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+}
+
+.role-desc {
+  font-size: 14px;
+  color: var(--text2);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.role-warning {
+  font-size: 12px;
+  color: var(--text3);
+  padding: 8px 16px;
+  border: 1px dashed var(--border2);
+  border-radius: 8px;
+  letter-spacing: 0.04em;
+}
+
+.leave-btn {
+  max-width: 200px;
+}
+
+/* ── Danger button ── */
+.btn-danger {
+  background: transparent;
+  color: #e74c3c;
+  border: 1px solid rgba(231, 76, 60, 0.35);
+}
+.btn-danger:hover {
+  background: rgba(231, 76, 60, 0.08);
+  border-color: #e74c3c;
+}
+
+/* ── God action buttons ── */
+.god-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.waiting-section .btn-danger,
+.god-actions .btn-danger {
+  margin-top: 4px;
+}
+
+/* ── End Game Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  padding: 32px 24px;
+  max-width: 320px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-icon {
+  font-size: 36px;
+}
+
+.modal-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.modal-desc {
+  font-size: 14px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
