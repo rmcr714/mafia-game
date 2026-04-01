@@ -77,10 +77,16 @@ export default function App() {
       players: {},
       rolesAssigned: false,
       gameStatus: "lobby",
+      createdAt: Date.now(),
     });
     setRoomCode(code);
     setScreen("god");
     listenRoom(code, true);
+    
+    // Auto-delete room after 2 hours if not manually ended
+    setTimeout(() => {
+      remove(ref(db, `rooms/${code}`));
+    }, 2 * 60 * 60 * 1000);
   }
 
   // ── Join room (Player) ───────────────────────────────────────
