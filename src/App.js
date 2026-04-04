@@ -19,15 +19,17 @@ const db = getDatabase(app);
 
 // ── Role definitions ─────────────────────────────────────────────
 const ROLES = {
-  MAFIA:     { label: "Mafia",     emoji: "🔪", team: "mafia", color: "#c0392b", desc: "Kill one citizen each night." },
-  GODFATHER: { label: "Godfather", emoji: "🎩", team: "mafia", color: "#8e1c1c", desc: "Mafia leader. Appears innocent to the Healer." },
-  JIHADI:    { label: "Jihadi",    emoji: "💣", team: "mafia", color: "#e67e22", desc: "Works for Mafia. Can take someone down when eliminated." },
-  HEALER:    { label: "Healer",    emoji: "💊", team: "town",  color: "#27ae60", desc: "Save one player from death each night." },
-  SHIELD:    { label: "Shield",    emoji: "🛡️", team: "town",  color: "#2980b9", desc: "Protect a player from being killed." },
-  CITIZEN:   { label: "Citizen",   emoji: "👤", team: "town",  color: "#7f8c8d", desc: "Vote out suspects during the day." },
+  MAFIA:      { label: "Mafia",      emoji: "🔪", team: "mafia", color: "#c0392b", desc: "Kill one citizen each night." },
+  GODFATHER:  { label: "Godfather",  emoji: "🎩", team: "mafia", color: "#8e1c1c", desc: "Mafia leader. Appears innocent to the Detective and Healer." },
+  JIHADI:     { label: "Jihadi",     emoji: "💣", team: "mafia", color: "#e67e22", desc: "Works for Mafia. Can take someone down when eliminated." },
+  DETECTIVE:  { label: "Detective",  emoji: "🔍", team: "town",  color: "#9b59b6", desc: "Investigate one player each night to learn if they are Mafia or not." },
+  HEALER:     { label: "Healer",     emoji: "💊", team: "town",  color: "#27ae60", desc: "Save one player from death each night." },
+  SHIELD:     { label: "Shield",     emoji: "🛡️", team: "town",  color: "#2980b9", desc: "Protect a player from being killed." },
+  CITIZEN:    { label: "Citizen",    emoji: "👤", team: "town",  color: "#7f8c8d", desc: "Vote out suspects during the day." },
 };
 
-const SPECIAL_ROLES = ["MAFIA", "GODFATHER", "JIHADI", "HEALER", "SHIELD"];
+// Roles that are "special" — assigned first before filling rest with Citizen
+const SPECIAL_ROLES = ["MAFIA", "GODFATHER", "JIHADI", "DETECTIVE", "HEALER", "SHIELD"];
 
 // ── Helpers ──────────────────────────────────────────────────────
 function generateCode() {
@@ -43,7 +45,7 @@ function shuffle(arr) {
   return a;
 }
 
-function assignRoles(players) {
+function assignRolesRandomly(players) {
   const names = Object.keys(players);
   const shuffled = shuffle(names);
   const assignments = {};
@@ -69,8 +71,10 @@ export default function App() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [assignMode, setAssignMode] = useState("random"); // "random" | "manual"
+  const [manualAssignments, setManualAssignments] = useState({}); // { playerName: roleKey }
 
-  // ── Create room (God) ────────────────────────────────────────
+  // ── Create room ──────────────────────────────────────────────
   async function createRoom() {
     const code = generateCode();
     await set(ref(db, `rooms/${code}`), {
@@ -82,26 +86,16 @@ export default function App() {
     setRoomCode(code);
     setScreen("god");
     listenRoom(code, true);
-    
-    // Auto-delete room after 2 hours if not manually ended
-    setTimeout(() => {
-      remove(ref(db, `rooms/${code}`));
-    }, 2 * 60 * 60 * 1000);
+    setTimeout(() => remove(ref(db, `rooms/${code}`)), 2 * 60 * 60 * 1000);
   }
 
-  // ── Join room (Player) ───────────────────────────────────────
+  // ── Join room ────────────────────────────────────────────────
   async function joinRoom() {
     setError("");
     const code = inputCode.trim().toUpperCase();
-    if (!code || !playerName.trim()) {
-      setError("Enter both a room code and your name.");
-      return;
-    }
+    if (!code || !playerName.trim()) { setError("Enter both a room code and your name."); return; }
     const snap = await get(ref(db, `rooms/${code}`));
-    if (!snap.exists()) {
-      setError("Room not found. Check the code.");
-      return;
-    }
+    if (!snap.exists()) { setError("Room not found. Check the code."); return; }
     const name = playerName.trim();
     await update(ref(db, `rooms/${code}/players`), { [name]: "waiting" });
     setRoomCode(code);
@@ -110,121 +104,86 @@ export default function App() {
     listenRoom(code, false, name);
   }
 
-  // ── Listen to room changes ───────────────────────────────────
+  // ── Listen to room ───────────────────────────────────────────
   function listenRoom(code, isGod, name) {
     onValue(ref(db, `rooms/${code}`), (snap) => {
-      // Room deleted — send everyone home
-      if (!snap.exists()) {
-        resetLocal();
-        return;
-      }
-
+      if (!snap.exists()) { resetLocal(); return; }
       const data = snap.val();
       const p = data.players || {};
       const status = data.gameStatus || "lobby";
-
       setPlayers(p);
       setRolesAssigned(!!data.rolesAssigned);
-
       if (!isGod) {
-        // God ended the game
-        if (status === "ended") {
-          resetLocal();
-          return;
-        }
-        // God hit Reassign — pull player back to waiting screen
-        if (status === "lobby" && !data.rolesAssigned) {
-          setMyRole(null);
-          setScreen("player");
-          return;
-        }
-        // Roles assigned — show role card
-        if (data.rolesAssigned && p[name] && p[name] !== "waiting") {
-          setMyRole(p[name]);
-          setScreen("role");
-        }
+        if (status === "ended") { resetLocal(); return; }
+        if (status === "lobby" && !data.rolesAssigned) { setMyRole(null); setScreen("player"); return; }
+        if (data.rolesAssigned && p[name] && p[name] !== "waiting") { setMyRole(p[name]); setScreen("role"); }
       }
     });
   }
 
-  // ── God assigns roles ────────────────────────────────────────
+  // ── Random assign ────────────────────────────────────────────
   async function handleAssignRoles() {
     if (Object.keys(players).length === 0) return;
-    const assignments = assignRoles(players);
-    await update(ref(db, `rooms/${roomCode}`), {
-      players: assignments,
-      rolesAssigned: true,
-      gameStatus: "active",
-    });
+    const assignments = assignRolesRandomly(players);
+    await update(ref(db, `rooms/${roomCode}`), { players: assignments, rolesAssigned: true, gameStatus: "active" });
   }
 
-  // ── God reassigns roles ───────────────────────────────────────
+  // ── Manual assign ────────────────────────────────────────────
+  async function handleManualAssign() {
+    const names = Object.keys(players);
+    // Fill any unassigned players with Citizen
+    const final = { ...manualAssignments };
+    names.forEach(n => { if (!final[n]) final[n] = "CITIZEN"; });
+    await update(ref(db, `rooms/${roomCode}`), { players: final, rolesAssigned: true, gameStatus: "active" });
+  }
+
+  function setManualRole(playerName, roleKey) {
+    setManualAssignments(prev => ({ ...prev, [playerName]: roleKey }));
+  }
+
+  // ── Reassign ─────────────────────────────────────────────────
   async function handleReassign() {
     const resetPlayers = {};
-    Object.keys(players).forEach((p) => (resetPlayers[p] = "waiting"));
-    // gameStatus: "lobby" pushes all players back to waiting screen automatically
-    await update(ref(db, `rooms/${roomCode}`), {
-      players: resetPlayers,
-      rolesAssigned: false,
-      gameStatus: "lobby",
-    });
+    Object.keys(players).forEach(p => (resetPlayers[p] = "waiting"));
+    setManualAssignments({});
+    await update(ref(db, `rooms/${roomCode}`), { players: resetPlayers, rolesAssigned: false, gameStatus: "lobby" });
   }
 
-  // ── God ends game ─────────────────────────────────────────────
+  // ── End game ─────────────────────────────────────────────────
   async function handleEndGame() {
     await update(ref(db, `rooms/${roomCode}`), { gameStatus: "ended" });
     await remove(ref(db, `rooms/${roomCode}`));
     resetLocal();
   }
 
-  // ── Copy room code ────────────────────────────────────────────
   function copyCode() {
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
-  // ── Reset local state ─────────────────────────────────────────
   function resetLocal() {
-    setScreen("home");
-    setRoomCode("");
-    setInputCode("");
-    setPlayerName("");
-    setMyName("");
-    setMyRole(null);
-    setPlayers({});
-    setRolesAssigned(false);
-    setError("");
-    setShowEndConfirm(false);
+    setScreen("home"); setRoomCode(""); setInputCode(""); setPlayerName("");
+    setMyName(""); setMyRole(null); setPlayers({}); setRolesAssigned(false);
+    setError(""); setShowEndConfirm(false); setManualAssignments({}); setAssignMode("random");
   }
 
   // ── Screens ──────────────────────────────────────────────────
   if (screen === "home")    return <HomeScreen onCreate={createRoom} onJoin={() => setScreen("joining")} />;
-  if (screen === "joining") return (
-    <JoinScreen
-      inputCode={inputCode} setInputCode={setInputCode}
-      playerName={playerName} setPlayerName={setPlayerName}
-      onJoin={joinRoom} error={error} onBack={resetLocal}
-    />
-  );
-  if (screen === "god") return (
+  if (screen === "joining") return <JoinScreen inputCode={inputCode} setInputCode={setInputCode} playerName={playerName} setPlayerName={setPlayerName} onJoin={joinRoom} error={error} onBack={resetLocal} />;
+  if (screen === "god")     return (
     <GodScreen
-      roomCode={roomCode} players={players}
-      rolesAssigned={rolesAssigned}
-      onAssign={handleAssignRoles}
-      onReassign={handleReassign}
-      onEndGame={handleEndGame}
-      showEndConfirm={showEndConfirm}
-      setShowEndConfirm={setShowEndConfirm}
+      roomCode={roomCode} players={players} rolesAssigned={rolesAssigned}
+      assignMode={assignMode} setAssignMode={setAssignMode}
+      manualAssignments={manualAssignments} setManualRole={setManualRole}
+      onAssign={handleAssignRoles} onManualAssign={handleManualAssign}
+      onReassign={handleReassign} onEndGame={handleEndGame}
+      showEndConfirm={showEndConfirm} setShowEndConfirm={setShowEndConfirm}
       onCopy={copyCode} copied={copied}
     />
   );
-  if (screen === "player") return (
-    <WaitingScreen name={myName} roomCode={roomCode} players={players} />
-  );
-  if (screen === "role") return (
-    <RoleScreen name={myName} roleKey={myRole} onLeave={resetLocal} />
-  );
+  if (screen === "player")  return <WaitingScreen name={myName} roomCode={roomCode} players={players} />;
+  if (screen === "role")    return <RoleScreen name={myName} roleKey={myRole} onLeave={resetLocal} />;
   return null;
 }
 
@@ -270,22 +229,11 @@ function JoinScreen({ inputCode, setInputCode, playerName, setPlayerName, onJoin
       <div className="form">
         <div className="input-group">
           <label>Room Code</label>
-          <input
-            className="input"
-            placeholder="e.g. AB12C"
-            value={inputCode}
-            onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-            maxLength={5}
-          />
+          <input className="input" placeholder="e.g. AB12C" value={inputCode} onChange={e => setInputCode(e.target.value.toUpperCase())} maxLength={5} />
         </div>
         <div className="input-group">
           <label>Your Name</label>
-          <input
-            className="input"
-            placeholder="Enter your name"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-          />
+          <input className="input" placeholder="Enter your name" value={playerName} onChange={e => setPlayerName(e.target.value)} onKeyDown={e => e.key === "Enter" && onJoin()} />
         </div>
         {error && <p className="error">{error}</p>}
         <button className="btn btn-primary full" onClick={onJoin}>Enter the Room</button>
@@ -295,14 +243,27 @@ function JoinScreen({ inputCode, setInputCode, playerName, setPlayerName, onJoin
 }
 
 // ── God Screen ───────────────────────────────────────────────────
-function GodScreen({ roomCode, players, rolesAssigned, onAssign, onReassign, onEndGame, showEndConfirm, setShowEndConfirm, onCopy, copied }) {
+function GodScreen({
+  roomCode, players, rolesAssigned,
+  assignMode, setAssignMode,
+  manualAssignments, setManualRole,
+  onAssign, onManualAssign,
+  onReassign, onEndGame,
+  showEndConfirm, setShowEndConfirm,
+  onCopy, copied
+}) {
   const playerList = Object.entries(players);
   const teamMafia  = playerList.filter(([, r]) => ROLES[r]?.team === "mafia");
   const teamTown   = playerList.filter(([, r]) => ROLES[r]?.team === "town");
   const waiting    = playerList.filter(([, r]) => r === "waiting");
 
+  // Check if manual assignments are complete (all players assigned)
+  const allAssigned = playerList.length > 0 &&
+    playerList.every(([name]) => !!manualAssignments[name]);
+
   return (
     <div className="screen">
+      {/* Header */}
       <div className="god-header">
         <div className="god-badge">👁️ GOD VIEW</div>
         <div className="room-code-display">
@@ -316,45 +277,91 @@ function GodScreen({ roomCode, players, rolesAssigned, onAssign, onReassign, onE
       {!rolesAssigned ? (
         <div className="waiting-section">
           <h3 className="section-title">Players Joined ({playerList.length})</h3>
-          {playerList.length === 0 ? (
-            <p className="empty-hint">Waiting for players to join…</p>
-          ) : (
-            <div className="player-list">
-              {playerList.map(([name]) => (
-                <div key={name} className="player-chip waiting">
-                  <span className="player-dot" />
-                  {name}
+
+          {playerList.length === 0
+            ? <p className="empty-hint">Waiting for players to join…</p>
+            : <div className="player-list">
+                {playerList.map(([name]) => (
+                  <div key={name} className="player-chip waiting">
+                    <span className="player-dot" />{name}
+                  </div>
+                ))}
+              </div>
+          }
+
+          {/* Mode toggle */}
+          {playerList.length > 0 && (
+            <>
+              <div className="mode-toggle">
+                <button
+                  className={`mode-btn ${assignMode === "random" ? "active" : ""}`}
+                  onClick={() => setAssignMode("random")}
+                >
+                  🎲 Random
+                </button>
+                <button
+                  className={`mode-btn ${assignMode === "manual" ? "active" : ""}`}
+                  onClick={() => setAssignMode("manual")}
+                >
+                  ✋ Manual
+                </button>
+              </div>
+
+              {/* RANDOM MODE */}
+              {assignMode === "random" && (
+                <div className="assign-section">
+                  <p className="assign-hint">Roles will be shuffled and assigned randomly to all players.</p>
+                  <button className="btn btn-primary full assign-btn" onClick={onAssign}>
+                    🎲 Assign Roles Randomly
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+
+              {/* MANUAL MODE */}
+              {assignMode === "manual" && (
+                <div className="assign-section">
+                  <p className="assign-hint">Pick a role for each player. Unassigned players get Citizen.</p>
+                  <div className="manual-list">
+                    {playerList.map(([name]) => (
+                      <ManualPlayerRow
+                        key={name}
+                        name={name}
+                        selectedRole={manualAssignments[name] || ""}
+                        onSelect={(role) => setManualRole(name, role)}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    className="btn btn-primary full assign-btn"
+                    onClick={onManualAssign}
+                    disabled={playerList.length === 0}
+                  >
+                    ✅ Confirm & Assign Roles
+                  </button>
+                </div>
+              )}
+            </>
           )}
-          <button className="btn btn-primary full assign-btn" onClick={onAssign} disabled={playerList.length === 0}>
-            🎲 Assign Roles Randomly
-          </button>
+
           <button className="btn btn-danger full" onClick={() => setShowEndConfirm(true)}>
             🚪 End Game
           </button>
         </div>
       ) : (
+        /* Roles assigned view */
         <div className="roles-section">
           <div className="team-block">
             <div className="team-label mafia-label">🔴 Mafia Team</div>
-            {teamMafia.map(([name, role]) => (
-              <GodPlayerRow key={name} name={name} roleKey={role} />
-            ))}
+            {teamMafia.map(([name, role]) => <GodPlayerRow key={name} name={name} roleKey={role} />)}
           </div>
           <div className="team-block">
             <div className="team-label town-label">🟢 Town Team</div>
-            {teamTown.map(([name, role]) => (
-              <GodPlayerRow key={name} name={name} roleKey={role} />
-            ))}
+            {teamTown.map(([name, role]) => <GodPlayerRow key={name} name={name} roleKey={role} />)}
           </div>
           {waiting.length > 0 && (
             <div className="team-block">
               <div className="team-label">⏳ Still Waiting</div>
-              {waiting.map(([name]) => (
-                <div key={name} className="player-row-waiting">{name}</div>
-              ))}
+              {waiting.map(([name]) => <div key={name} className="player-row-waiting">{name}</div>)}
             </div>
           )}
           <div className="god-actions">
@@ -364,12 +371,13 @@ function GodScreen({ roomCode, players, rolesAssigned, onAssign, onReassign, onE
         </div>
       )}
 
+      {/* End game confirm modal */}
       {showEndConfirm && (
         <div className="modal-overlay">
           <div className="modal">
             <div className="modal-icon">⚠️</div>
             <h3 className="modal-title">End this game?</h3>
-            <p className="modal-desc">All players will be sent back to the home screen and the room will be deleted.</p>
+            <p className="modal-desc">All players will be sent back to home and the room will be deleted.</p>
             <div className="modal-actions">
               <button className="btn btn-danger full" onClick={onEndGame}>Yes, End Game</button>
               <button className="btn btn-outline full" onClick={() => setShowEndConfirm(false)}>Cancel</button>
@@ -381,15 +389,38 @@ function GodScreen({ roomCode, players, rolesAssigned, onAssign, onReassign, onE
   );
 }
 
+// ── Manual Player Row ────────────────────────────────────────────
+function ManualPlayerRow({ name, selectedRole, onSelect }) {
+  const role = ROLES[selectedRole];
+  return (
+    <div className="manual-row">
+      <div className="manual-player-name">
+        <span className="player-dot" style={{ background: role?.color || "var(--text3)" }} />
+        {name}
+      </div>
+      <select
+        className="role-select"
+        value={selectedRole}
+        onChange={e => onSelect(e.target.value)}
+        style={{ borderColor: role ? role.color + "66" : "var(--border2)", color: role?.color || "var(--text2)" }}
+      >
+        <option value="">— Pick role —</option>
+        {Object.entries(ROLES).map(([key, r]) => (
+          <option key={key} value={key}>{r.emoji} {r.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ── God Player Row ───────────────────────────────────────────────
 function GodPlayerRow({ name, roleKey }) {
   const role = ROLES[roleKey];
   if (!role) return null;
   return (
     <div className="god-player-row" style={{ borderLeftColor: role.color }}>
       <div className="god-player-name">{name}</div>
-      <div className="god-player-role" style={{ color: role.color }}>
-        {role.emoji} {role.label}
-      </div>
+      <div className="god-player-role" style={{ color: role.color }}>{role.emoji} {role.label}</div>
     </div>
   );
 }
@@ -406,7 +437,7 @@ function WaitingScreen({ name, roomCode, players }) {
       <div className="room-pill">Room: <strong>{roomCode}</strong></div>
       <div className="waiting-players">
         <p className="section-title">In this room ({Object.keys(players).length})</p>
-        {Object.keys(players).map((p) => (
+        {Object.keys(players).map(p => (
           <div key={p} className={`player-chip waiting ${p === name ? "me" : ""}`}>
             <span className="player-dot" />
             {p} {p === name && <span className="you-tag">you</span>}
