@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect } from "firebase/database";
+import { getDatabase, ref, set, get, onValue, onChildRemoved, update, remove, onDisconnect } from "firebase/database";
 import "./App.css";
 
 // ── Firebase config ──────────────────────────────────────────────
@@ -74,7 +74,8 @@ export default function App() {
   const [assignMode, setAssignMode] = useState("random"); // "random" | "manual"
   const [manualAssignments, setManualAssignments] = useState({}); // { playerName: roleKey }
   const [leaveNotif, setLeaveNotif] = useState(null); // { name, wasKicked }
-  const prevPlayersRef = useRef({}); // ref to detect who left
+  const roomUnsubRef = useRef(null); // teardown room listeners on leave / reset
+  const pendingKickRef = useRef(null); // suppress duplicate notif when God kicks (onChildRemoved also fires)
 
   // ── Create room ──────────────────────────────────────────────
   async function createRoom() {
@@ -112,36 +113,50 @@ export default function App() {
   }
 
   // ── Listen to room ───────────────────────────────────────────
-  function listenRoom(code, isGod, name) {
-    onValue(ref(db, `rooms/${code}`), (snap) => {
+  function listenRoom(code, isGod, playerName) {
+    if (roomUnsubRef.current) {
+      roomUnsubRef.current();
+      roomUnsubRef.current = null;
+    }
+
+    const roomRef = ref(db, `rooms/${code}`);
+    const playersRef = ref(db, `rooms/${code}/players`);
+
+    // Reliable "player left" for God (voluntary leave + tab close). Kicks are handled in kickPlayer + we skip here.
+    let unsubChildRemoved = null;
+    if (isGod) {
+      unsubChildRemoved = onChildRemoved(playersRef, (childSnap) => {
+        const leftName = childSnap.key;
+        if (pendingKickRef.current === leftName) {
+          pendingKickRef.current = null;
+          return;
+        }
+        setLeaveNotif({ name: leftName, wasKicked: false });
+        setTimeout(() => setLeaveNotif(null), 4000);
+      });
+    }
+
+    const unsubValue = onValue(roomRef, (snap) => {
       if (!snap.exists()) { resetLocal(); return; }
       const data = snap.val();
       const p = data.players || {};
       const status = data.gameStatus || "lobby";
-
-      // Detect who left — compare with previous snapshot
-      if (isGod) {
-        const prev = prevPlayersRef.current;
-        const prevNames = Object.keys(prev);
-        const currNames = Object.keys(p);
-        const left = prevNames.filter(n => !currNames.includes(n));
-        if (left.length > 0) {
-          setLeaveNotif({ name: left[0], wasKicked: false });
-          setTimeout(() => setLeaveNotif(null), 4000);
-        }
-      }
-      prevPlayersRef.current = p;
 
       setPlayers(p);
       setRolesAssigned(!!data.rolesAssigned);
       if (!isGod) {
         if (status === "ended") { resetLocal(); return; }
         // Player was kicked — their entry is gone
-        if (name && !p[name]) { resetLocal(); return; }
+        if (playerName && !p[playerName]) { resetLocal(); return; }
         if (status === "lobby" && !data.rolesAssigned) { setMyRole(null); setScreen("player"); return; }
-        if (data.rolesAssigned && p[name] && p[name] !== "waiting") { setMyRole(p[name]); setScreen("role"); }
+        if (data.rolesAssigned && p[playerName] && p[playerName] !== "waiting") { setMyRole(p[playerName]); setScreen("role"); }
       }
     });
+
+    roomUnsubRef.current = () => {
+      unsubValue();
+      if (unsubChildRemoved) unsubChildRemoved();
+    };
   }
 
   // ── Random assign ────────────────────────────────────────────
@@ -166,7 +181,13 @@ export default function App() {
 
   // ── Kick player ──────────────────────────────────────────────
   async function kickPlayer(name) {
-    await remove(ref(db, `rooms/${roomCode}/players/${name}`));
+    pendingKickRef.current = name;
+    try {
+      await remove(ref(db, `rooms/${roomCode}/players/${name}`));
+    } catch (e) {
+      pendingKickRef.current = null;
+      throw e;
+    }
     // Clear from manual assignments too
     setManualAssignments(prev => {
       const updated = { ...prev };
@@ -199,20 +220,31 @@ export default function App() {
   }
 
   function resetLocal() {
+    if (roomUnsubRef.current) {
+      roomUnsubRef.current();
+      roomUnsubRef.current = null;
+    }
+    pendingKickRef.current = null;
     setScreen("home"); setRoomCode(""); setInputCode(""); setPlayerName("");
     setMyName(""); setMyRole(null); setPlayers({}); setRolesAssigned(false);
     setError(""); setShowEndConfirm(false); setManualAssignments({}); setAssignMode("random");
-    setLeaveNotif(null); prevPlayersRef.current = {};
+    setLeaveNotif(null);
   }
 
   // ── Screens ──────────────────────────────────────────────────
 
-  // Explicit voluntary leave — remove from Firebase, cancel onDisconnect
+  // Explicit voluntary leave — remove from Firebase; cancel onDisconnect (never block remove if cancel fails)
   async function leaveRoom() {
     if (myName && roomCode) {
       const playerRef = ref(db, `rooms/${roomCode}/players/${myName}`);
-      await onDisconnect(playerRef).cancel(); // cancel the auto-remove so it doesn't double fire
-      await remove(playerRef);               // manually remove right now
+      try {
+        await onDisconnect(playerRef).cancel();
+      } catch (_) { /* still remove below */ }
+      try {
+        await remove(playerRef);
+      } catch (e) {
+        console.warn("Leave room: remove failed", e);
+      }
     }
     resetLocal();
   }
