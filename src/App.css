@@ -327,6 +327,60 @@ h2 { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; 
 .role-warning { font-size: 12px; color: var(--text3); padding: 8px 16px; border: 1px dashed var(--border2); border-radius: 8px; letter-spacing: 0.04em; }
 .leave-btn { max-width: 200px; }
 
+/* ── Leave notification ── */
+.leave-notif {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 30px;
+  padding: 10px 20px;
+  font-size: 13px;
+  color: var(--text2);
+  z-index: 200;
+  white-space: nowrap;
+  animation: notifIn 0.3s ease, notifOut 0.3s ease 3.7s forwards;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.leave-notif strong { color: var(--text); }
+
+@keyframes notifIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes notifOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ── Kick button ── */
+.kick-btn {
+  background: transparent;
+  border: 1px solid rgba(231,76,60,0.3);
+  color: #e74c3c;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.kick-btn:hover {
+  background: rgba(231,76,60,0.15);
+  border-color: #e74c3c;
+  transform: scale(1.1);
+  box-shadow: 0 0 8px rgba(231,76,60,0.2);
+}
+
 /* ── Modal ── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
 .modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 20px; padding: 32px 24px; max-width: 320px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 12px; }

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, get, onValue, update, remove } from "firebase/database";
+import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect } from "firebase/database";
 import "./App.css";
 
 // ── Firebase config ──────────────────────────────────────────────
@@ -73,6 +73,8 @@ export default function App() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [assignMode, setAssignMode] = useState("random"); // "random" | "manual"
   const [manualAssignments, setManualAssignments] = useState({}); // { playerName: roleKey }
+  const [leaveNotif, setLeaveNotif] = useState(null); // { name, wasKicked }
+  const prevPlayersRef = useRef({}); // ref to detect who left
 
   // ── Create room ──────────────────────────────────────────────
   async function createRoom() {
@@ -97,7 +99,12 @@ export default function App() {
     const snap = await get(ref(db, `rooms/${code}`));
     if (!snap.exists()) { setError("Room not found. Check the code."); return; }
     const name = playerName.trim();
-    await update(ref(db, `rooms/${code}/players`), { [name]: "waiting" });
+    const playerRef = ref(db, `rooms/${code}/players/${name}`);
+
+    // Auto-remove player from Firebase if they close the tab or lose connection
+    onDisconnect(playerRef).remove();
+
+    await set(playerRef, "waiting");
     setRoomCode(code);
     setMyName(name);
     setScreen("player");
@@ -111,10 +118,26 @@ export default function App() {
       const data = snap.val();
       const p = data.players || {};
       const status = data.gameStatus || "lobby";
+
+      // Detect who left — compare with previous snapshot
+      if (isGod) {
+        const prev = prevPlayersRef.current;
+        const prevNames = Object.keys(prev);
+        const currNames = Object.keys(p);
+        const left = prevNames.filter(n => !currNames.includes(n));
+        if (left.length > 0) {
+          setLeaveNotif({ name: left[0], wasKicked: false });
+          setTimeout(() => setLeaveNotif(null), 4000);
+        }
+      }
+      prevPlayersRef.current = p;
+
       setPlayers(p);
       setRolesAssigned(!!data.rolesAssigned);
       if (!isGod) {
         if (status === "ended") { resetLocal(); return; }
+        // Player was kicked — their entry is gone
+        if (name && !p[name]) { resetLocal(); return; }
         if (status === "lobby" && !data.rolesAssigned) { setMyRole(null); setScreen("player"); return; }
         if (data.rolesAssigned && p[name] && p[name] !== "waiting") { setMyRole(p[name]); setScreen("role"); }
       }
@@ -139,6 +162,19 @@ export default function App() {
 
   function setManualRole(playerName, roleKey) {
     setManualAssignments(prev => ({ ...prev, [playerName]: roleKey }));
+  }
+
+  // ── Kick player ──────────────────────────────────────────────
+  async function kickPlayer(name) {
+    await remove(ref(db, `rooms/${roomCode}/players/${name}`));
+    // Clear from manual assignments too
+    setManualAssignments(prev => {
+      const updated = { ...prev };
+      delete updated[name];
+      return updated;
+    });
+    setLeaveNotif({ name, wasKicked: true });
+    setTimeout(() => setLeaveNotif(null), 4000);
   }
 
   // ── Reassign ─────────────────────────────────────────────────
@@ -166,9 +202,21 @@ export default function App() {
     setScreen("home"); setRoomCode(""); setInputCode(""); setPlayerName("");
     setMyName(""); setMyRole(null); setPlayers({}); setRolesAssigned(false);
     setError(""); setShowEndConfirm(false); setManualAssignments({}); setAssignMode("random");
+    setLeaveNotif(null); prevPlayersRef.current = {};
   }
 
   // ── Screens ──────────────────────────────────────────────────
+
+  // Explicit voluntary leave — remove from Firebase, cancel onDisconnect
+  async function leaveRoom() {
+    if (myName && roomCode) {
+      const playerRef = ref(db, `rooms/${roomCode}/players/${myName}`);
+      await onDisconnect(playerRef).cancel(); // cancel the auto-remove so it doesn't double fire
+      await remove(playerRef);               // manually remove right now
+    }
+    resetLocal();
+  }
+
   if (screen === "home")    return <HomeScreen onCreate={createRoom} onJoin={() => setScreen("joining")} />;
   if (screen === "joining") return <JoinScreen inputCode={inputCode} setInputCode={setInputCode} playerName={playerName} setPlayerName={setPlayerName} onJoin={joinRoom} error={error} onBack={resetLocal} />;
   if (screen === "god")     return (
@@ -178,12 +226,13 @@ export default function App() {
       manualAssignments={manualAssignments} setManualRole={setManualRole}
       onAssign={handleAssignRoles} onManualAssign={handleManualAssign}
       onReassign={handleReassign} onEndGame={handleEndGame}
+      onKick={kickPlayer} leaveNotif={leaveNotif}
       showEndConfirm={showEndConfirm} setShowEndConfirm={setShowEndConfirm}
       onCopy={copyCode} copied={copied}
     />
   );
-  if (screen === "player")  return <WaitingScreen name={myName} roomCode={roomCode} players={players} />;
-  if (screen === "role")    return <RoleScreen name={myName} roleKey={myRole} onLeave={resetLocal} />;
+  if (screen === "player")  return <WaitingScreen name={myName} roomCode={roomCode} players={players} onLeave={leaveRoom} />;
+  if (screen === "role")    return <RoleScreen name={myName} roleKey={myRole} onLeave={leaveRoom} />;
   return null;
 }
 
@@ -248,7 +297,8 @@ function GodScreen({
   assignMode, setAssignMode,
   manualAssignments, setManualRole,
   onAssign, onManualAssign,
-  onReassign, onEndGame,
+  onReassign, onEndGame, onKick,
+  leaveNotif,
   showEndConfirm, setShowEndConfirm,
   onCopy, copied
 }) {
@@ -257,12 +307,20 @@ function GodScreen({
   const teamTown   = playerList.filter(([, r]) => ROLES[r]?.team === "town");
   const waiting    = playerList.filter(([, r]) => r === "waiting");
 
-  // Check if manual assignments are complete (all players assigned)
   const allAssigned = playerList.length > 0 &&
     playerList.every(([name]) => !!manualAssignments[name]);
 
   return (
     <div className="screen">
+      {/* Leave / Kick notification */}
+      {leaveNotif && (
+        <div className="leave-notif">
+          {leaveNotif.wasKicked ? "👢" : "🚶"}{" "}
+          <strong>{leaveNotif.name}</strong>{" "}
+          {leaveNotif.wasKicked ? "was kicked from the room" : "left the room"}
+        </div>
+      )}
+
       {/* Header */}
       <div className="god-header">
         <div className="god-badge">👁️ GOD VIEW</div>
@@ -283,7 +341,16 @@ function GodScreen({
             : <div className="player-list">
                 {playerList.map(([name]) => (
                   <div key={name} className="player-chip waiting">
-                    <span className="player-dot" />{name}
+                    <span className="player-dot" />
+                    <span style={{ flex: 1 }}>{name}</span>
+                    <button className="kick-btn" onClick={() => onKick(name)} title="Kick player">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden={true}>
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                        <circle cx="8.5" cy="7" r="4" />
+                        <line x1="18" y1="8" x2="23" y2="13" />
+                        <line x1="23" y1="8" x2="18" y2="13" />
+                      </svg>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -352,11 +419,11 @@ function GodScreen({
         <div className="roles-section">
           <div className="team-block">
             <div className="team-label mafia-label">🔴 Mafia Team</div>
-            {teamMafia.map(([name, role]) => <GodPlayerRow key={name} name={name} roleKey={role} />)}
+            {teamMafia.map(([name, role]) => <GodPlayerRow key={name} name={name} roleKey={role} onKick={onKick} />)}
           </div>
           <div className="team-block">
             <div className="team-label town-label">🟢 Town Team</div>
-            {teamTown.map(([name, role]) => <GodPlayerRow key={name} name={name} roleKey={role} />)}
+            {teamTown.map(([name, role]) => <GodPlayerRow key={name} name={name} roleKey={role} onKick={onKick} />)}
           </div>
           {waiting.length > 0 && (
             <div className="team-block">
@@ -414,19 +481,31 @@ function ManualPlayerRow({ name, selectedRole, onSelect }) {
 }
 
 // ── God Player Row ───────────────────────────────────────────────
-function GodPlayerRow({ name, roleKey }) {
+function GodPlayerRow({ name, roleKey, onKick }) {
   const role = ROLES[roleKey];
   if (!role) return null;
   return (
     <div className="god-player-row" style={{ borderLeftColor: role.color }}>
       <div className="god-player-name">{name}</div>
-      <div className="god-player-role" style={{ color: role.color }}>{role.emoji} {role.label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="god-player-role" style={{ color: role.color }}>{role.emoji} {role.label}</div>
+        {onKick && (
+          <button className="kick-btn" onClick={() => onKick(name)} title="Kick player">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden={true}>
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="8.5" cy="7" r="4" />
+              <line x1="18" y1="8" x2="23" y2="13" />
+              <line x1="23" y1="8" x2="18" y2="13" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Waiting Screen ───────────────────────────────────────────────
-function WaitingScreen({ name, roomCode, players }) {
+function WaitingScreen({ name, roomCode, players, onLeave }) {
   return (
     <div className="screen center">
       <div className="logo-area small">
@@ -444,6 +523,9 @@ function WaitingScreen({ name, roomCode, players }) {
           </div>
         ))}
       </div>
+      <button className="btn btn-outline leave-btn" style={{ marginTop: 24 }} onClick={onLeave}>
+        Leave Room
+      </button>
     </div>
   );
 }
