@@ -21,12 +21,13 @@ export async function fetchRoomSnapshot(code) {
   return get(roomRef(code));
 }
 
-export async function writeNewRoom(code) {
+export async function writeNewRoom(code, roomSize = 4) {
   await set(roomRef(code), {
     players: {},
     rolesAssigned: false,
     gameStatus: "lobby",
     createdAt: Date.now(),
+    roomSize: roomSize,
   });
 }
 

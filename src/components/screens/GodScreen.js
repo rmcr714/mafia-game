@@ -5,6 +5,8 @@ import { GodPlayerRow } from "../god/GodPlayerRow";
 
 export function GodScreen({
   roomCode,
+  roomSize,
+  snapshot,
   players,
   rolesAssigned,
   assignMode,
@@ -28,8 +30,9 @@ export function GodScreen({
   const waiting = playerList.filter(([, r]) => r === "waiting");
 
   return (
-    <div className="screen">
-      {leaveNotif && (
+    <div className="god-dashboard-container">
+      <div className="screen god-main-col">
+        {leaveNotif && (
         <div className="leave-notif">
           {leaveNotif.wasKicked ? "👢" : "🚶"}{" "}
           <strong>{leaveNotif.name}</strong>{" "}
@@ -69,7 +72,7 @@ export function GodScreen({
             </div>
           )}
 
-          {playerList.length > 0 && (
+          {playerList.length >= roomSize ? (
             <>
               <div className="mode-toggle">
                 <button
@@ -121,6 +124,12 @@ export function GodScreen({
                 </div>
               )}
             </>
+          ) : (
+            <div className="assign-section">
+              <p className="assign-hint" style={{ marginTop: '16px' }}>
+                Waiting for {Math.max(0, roomSize - playerList.length)} more player(s) to reach the required room size ({roomSize}) before assigning roles.
+              </p>
+            </div>
           )}
 
           <button type="button" className="btn btn-danger full" onClick={() => setShowEndConfirm(true)}>
@@ -177,6 +186,27 @@ export function GodScreen({
               </button>
             </div>
           </div>
+        </div>
+      )}
+      </div>
+
+      {rolesAssigned && snapshot && (
+        <div className="god-sidebar-col">
+          <h3 className="god-sidebar-title">Roles Snapshot</h3>
+          {Object.keys(snapshot).length === 0 ? (
+            <div className="snapshot-empty">No snapshot taken.</div>
+          ) : (
+            <div className="snapshot-list">
+              {Object.entries(snapshot).map(([name, r]) => (
+                <div key={name} className="snapshot-row">
+                  <span className="snapshot-name">{name}</span>
+                  <span className="snapshot-role" style={{ color: ROLES[r]?.color }}>
+                    {ROLES[r] ? `${ROLES[r].emoji} ${ROLES[r].label}` : r}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

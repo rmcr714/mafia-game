@@ -29,6 +29,8 @@ export default function App() {
     return (
       <GodScreen
         roomCode={game.roomCode}
+        roomSize={game.roomSize}
+        snapshot={game.snapshot}
         players={game.players}
         rolesAssigned={game.rolesAssigned}
         assignMode={game.assignMode}

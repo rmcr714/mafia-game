@@ -23,6 +23,8 @@ export function useGameRoom() {
   const [assignMode, setAssignMode] = useState("random");
   const [manualAssignments, setManualAssignments] = useState({});
   const [leaveNotif, setLeaveNotif] = useState(null);
+  const [roomSize, setRoomSize] = useState(4);
+  const [snapshot, setSnapshot] = useState(null);
 
   const roomUnsubRef = useRef(null);
   const pendingKickRef = useRef(null);
@@ -50,6 +52,8 @@ export function useGameRoom() {
     setManualAssignments({});
     setAssignMode("random");
     setLeaveNotif(null);
+    setRoomSize(4);
+    setSnapshot(null);
   }, [detachRoomListeners]);
 
   const listenRoom = useCallback(
@@ -83,6 +87,8 @@ export function useGameRoom() {
 
         setPlayers(p);
         setRolesAssigned(!!data.rolesAssigned);
+        if (data.roomSize) setRoomSize(data.roomSize);
+        if (data.snapshot !== undefined) setSnapshot(data.snapshot);
         if (!isGod) {
           if (status === "ended") {
             resetLocal();
@@ -112,11 +118,12 @@ export function useGameRoom() {
     [detachRoomListeners, resetLocal]
   );
 
-  const createRoom = useCallback(async () => {
+  const createRoom = useCallback(async (size = 4) => {
     const code = generateRoomCode();
-    await rooms.writeNewRoom(code);
+    await rooms.writeNewRoom(code, size);
     setRoomCode(code);
     setScreen("god");
+    setRoomSize(size);
     listenRoom(code, true);
     rooms.scheduleRoomDeletion(code, ROOM_TTL_MS);
   }, [listenRoom]);
@@ -149,6 +156,7 @@ export function useGameRoom() {
       players: assignments,
       rolesAssigned: true,
       gameStatus: "active",
+      snapshot: assignments,
     });
   }, [players, roomCode]);
 
@@ -162,6 +170,7 @@ export function useGameRoom() {
       players: final,
       rolesAssigned: true,
       gameStatus: "active",
+      snapshot: final,
     });
   }, [players, manualAssignments, roomCode]);
 
@@ -199,6 +208,7 @@ export function useGameRoom() {
       players: resetPlayers,
       rolesAssigned: false,
       gameStatus: "lobby",
+      snapshot: null,
     });
   }, [players, roomCode]);
 
@@ -251,6 +261,8 @@ export function useGameRoom() {
     setAssignMode,
     manualAssignments,
     leaveNotif,
+    roomSize,
+    snapshot,
     createRoom,
     joinRoom,
     handleAssignRoles,
