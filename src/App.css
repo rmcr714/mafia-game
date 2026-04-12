@@ -387,6 +387,50 @@ h2 { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; 
   to   { opacity: 0; }
 }
 
+/* ── Rejoin Toast ── */
+.rejoin-toast-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 380px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+  animation: slideDownToast 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes slideDownToast {
+  from { top: -100px; opacity: 0; }
+  to { top: 24px; opacity: 1; }
+}
+.rejoin-toast-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.4;
+}
+.rejoin-toast-header strong {
+  color: var(--accent);
+}
+.rejoin-toast-actions {
+  display: flex;
+  gap: 8px;
+}
+.rejoin-toast-actions .btn {
+  padding: 10px;
+  font-size: 13px;
+  flex: 1;
+}
+
 /* ── Kick button ── */
 .kick-btn {
   background: transparent;

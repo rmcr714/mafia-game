@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { onValue, onChildRemoved } from "firebase/database";
 import * as rooms from "../api/rooms";
 import { assignRolesRandomly } from "../constants/roles";
@@ -12,7 +12,7 @@ export function useGameRoom() {
   const [screen, setScreen] = useState("home");
   const [roomCode, setRoomCode] = useState("");
   const [inputCode, setInputCode] = useState("");
-  const [playerName, setPlayerName] = useState("");
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem("mafia_preferredName") || "");
   const [myName, setMyName] = useState("");
   const [myRole, setMyRole] = useState(null);
   const [players, setPlayers] = useState({});
@@ -25,6 +25,7 @@ export function useGameRoom() {
   const [leaveNotif, setLeaveNotif] = useState(null);
   const [roomSize, setRoomSize] = useState(4);
   const [snapshot, setSnapshot] = useState(null);
+  const [rejoinPrompt, setRejoinPrompt] = useState(null);
 
   const roomUnsubRef = useRef(null);
   const pendingKickRef = useRef(null);
@@ -36,13 +37,38 @@ export function useGameRoom() {
     }
   }, []);
 
+  const checkSession = useCallback(async () => {
+    const sessionStr = localStorage.getItem("mafia_session");
+    if (!sessionStr) return;
+    try {
+      const session = JSON.parse(sessionStr);
+      if (Date.now() - session.timestamp > 3600000) {
+        localStorage.removeItem("mafia_session");
+        return;
+      }
+      const snap = await rooms.fetchRoomSnapshot(session.roomCode);
+      if (snap.exists()) {
+        const data = snap.val();
+        if (data.gameStatus === "active" && data.rolesAssigned && data.snapshot && data.snapshot[session.playerName]) {
+          setRejoinPrompt({ roomCode: session.roomCode, playerName: session.playerName });
+        } else {
+           localStorage.removeItem("mafia_session");
+        }
+      } else {
+        localStorage.removeItem("mafia_session");
+      }
+    } catch (e) {
+      localStorage.removeItem("mafia_session");
+    }
+  }, []);
+
   const resetLocal = useCallback(() => {
     detachRoomListeners();
     pendingKickRef.current = null;
     setScreen("home");
     setRoomCode("");
     setInputCode("");
-    setPlayerName("");
+    setPlayerName(localStorage.getItem("mafia_preferredName") || "");
     setMyName("");
     setMyRole(null);
     setPlayers({});
@@ -54,7 +80,12 @@ export function useGameRoom() {
     setLeaveNotif(null);
     setRoomSize(4);
     setSnapshot(null);
-  }, [detachRoomListeners]);
+    checkSession();
+  }, [detachRoomListeners, checkSession]);
+
+  useEffect(() => {
+    checkSession();
+  }, [checkSession]);
 
   const listenRoom = useCallback(
     (code, isGod, joinedPlayerName) => {
@@ -106,6 +137,11 @@ export function useGameRoom() {
           if (data.rolesAssigned && p[joinedPlayerName] && p[joinedPlayerName] !== "waiting") {
             setMyRole(p[joinedPlayerName]);
             setScreen("role");
+            localStorage.setItem("mafia_session", JSON.stringify({
+              roomCode: code,
+              playerName: joinedPlayerName,
+              timestamp: Date.now()
+            }));
           }
         }
       });
@@ -141,6 +177,7 @@ export function useGameRoom() {
       return;
     }
     const name = playerName.trim();
+    localStorage.setItem("mafia_preferredName", name);
     rooms.registerDisconnectRemove(code, name);
     await rooms.setPlayerWaiting(code, name);
     setRoomCode(code);
@@ -225,6 +262,7 @@ export function useGameRoom() {
   }, [roomCode]);
 
   const leaveRoom = useCallback(async () => {
+    localStorage.removeItem("mafia_session");
     if (myName && roomCode) {
       try {
         await rooms.cancelPlayerOnDisconnect(roomCode, myName);
@@ -239,6 +277,39 @@ export function useGameRoom() {
     }
     resetLocal();
   }, [myName, roomCode, resetLocal]);
+
+  const confirmRejoin = useCallback(async () => {
+    if (!rejoinPrompt) return;
+    const { roomCode: code, playerName: name } = rejoinPrompt;
+    setRejoinPrompt(null);
+    setError("");
+
+    const snap = await rooms.fetchRoomSnapshot(code);
+    if (!snap.exists()) {
+       localStorage.removeItem("mafia_session");
+       setError("Room not found or no longer active.");
+       return;
+    }
+    const data = snap.val();
+    if (data.rolesAssigned && data.snapshot && data.snapshot[name]) {
+       const role = data.snapshot[name];
+       rooms.registerDisconnectRemove(code, name);
+       await rooms.updateRoomFields(code, {
+         [`players/${name}`]: role
+       });
+       setRoomCode(code);
+       setMyName(name);
+       listenRoom(code, false, name);
+    } else {
+       localStorage.removeItem("mafia_session");
+       setError("Rejoin failed. Roles may have been reset.");
+    }
+  }, [rejoinPrompt, listenRoom]);
+
+  const cancelRejoin = useCallback(() => {
+    setRejoinPrompt(null);
+    localStorage.removeItem("mafia_session");
+  }, []);
 
   const goToJoin = useCallback(() => setScreen("joining"), []);
 
@@ -263,6 +334,9 @@ export function useGameRoom() {
     leaveNotif,
     roomSize,
     snapshot,
+    rejoinPrompt,
+    confirmRejoin,
+    cancelRejoin,
     createRoom,
     joinRoom,
     handleAssignRoles,

@@ -9,11 +9,11 @@ import "./App.css";
 export default function App() {
   const game = useGameRoom();
 
+  let content = null;
   if (game.screen === "home") {
-    return <HomeScreen onCreate={game.createRoom} onJoin={game.goToJoin} />;
-  }
-  if (game.screen === "joining") {
-    return (
+    content = <HomeScreen onCreate={game.createRoom} onJoin={game.goToJoin} />;
+  } else if (game.screen === "joining") {
+    content = (
       <JoinScreen
         inputCode={game.inputCode}
         setInputCode={game.setInputCode}
@@ -24,9 +24,8 @@ export default function App() {
         onBack={game.resetLocal}
       />
     );
-  }
-  if (game.screen === "god") {
-    return (
+  } else if (game.screen === "god") {
+    content = (
       <GodScreen
         roomCode={game.roomCode}
         roomSize={game.roomSize}
@@ -49,9 +48,8 @@ export default function App() {
         copied={game.copied}
       />
     );
-  }
-  if (game.screen === "player") {
-    return (
+  } else if (game.screen === "player") {
+    content = (
       <WaitingScreen
         name={game.myName}
         roomCode={game.roomCode}
@@ -59,9 +57,31 @@ export default function App() {
         onLeave={game.leaveRoom}
       />
     );
+  } else if (game.screen === "role") {
+    content = <RoleScreen name={game.myName} roleKey={game.myRole} onLeave={game.leaveRoom} />;
   }
-  if (game.screen === "role") {
-    return <RoleScreen name={game.myName} roleKey={game.myRole} onLeave={game.leaveRoom} />;
-  }
-  return null;
+
+  return (
+    <>
+      {game.rejoinPrompt && (
+        <div className="rejoin-toast-container">
+          <div className="rejoin-toast-header">
+            <span>🔄</span>
+            <span>
+              Reconnect to <strong>{game.rejoinPrompt.roomCode}</strong> as <strong>{game.rejoinPrompt.playerName}</strong>?
+            </span>
+          </div>
+          <div className="rejoin-toast-actions">
+            <button type="button" className="btn btn-primary" onClick={game.confirmRejoin}>
+              Rejoin
+            </button>
+            <button type="button" className="btn btn-outline" onClick={game.cancelRejoin}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+      {content}
+    </>
+  );
 }
