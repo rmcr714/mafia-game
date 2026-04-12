@@ -26,6 +26,7 @@ export function useGameRoom() {
   const [roomSize, setRoomSize] = useState(4);
   const [snapshot, setSnapshot] = useState(null);
   const [rejoinPrompt, setRejoinPrompt] = useState(null);
+  const [isToastDismissed, setIsToastDismissed] = useState(false);
 
   const roomUnsubRef = useRef(null);
   const pendingKickRef = useRef(null);
@@ -50,6 +51,7 @@ export function useGameRoom() {
       if (snap.exists()) {
         const data = snap.val();
         if (data.gameStatus === "active" && data.rolesAssigned && data.snapshot && data.snapshot[session.playerName]) {
+          setIsToastDismissed(false);
           setRejoinPrompt({ roomCode: session.roomCode, playerName: session.playerName });
         } else {
            localStorage.removeItem("mafia_session");
@@ -282,6 +284,7 @@ export function useGameRoom() {
     if (!rejoinPrompt) return;
     const { roomCode: code, playerName: name } = rejoinPrompt;
     setRejoinPrompt(null);
+    setIsToastDismissed(false);
     setError("");
 
     const snap = await rooms.fetchRoomSnapshot(code);
@@ -307,8 +310,7 @@ export function useGameRoom() {
   }, [rejoinPrompt, listenRoom]);
 
   const cancelRejoin = useCallback(() => {
-    setRejoinPrompt(null);
-    localStorage.removeItem("mafia_session");
+    setIsToastDismissed(true);
   }, []);
 
   const goToJoin = useCallback(() => setScreen("joining"), []);
@@ -335,6 +337,7 @@ export function useGameRoom() {
     roomSize,
     snapshot,
     rejoinPrompt,
+    isToastDismissed,
     confirmRejoin,
     cancelRejoin,
     createRoom,

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ROLES } from "../../constants/roles";
 
-export function HomeScreen({ onCreate, onJoin }) {
+export function HomeScreen({ onCreate, onJoin, rejoinPrompt, isToastDismissed, confirmRejoin }) {
   const [roomSize, setRoomSize] = useState(0);
 
   return (
@@ -55,6 +55,19 @@ export function HomeScreen({ onCreate, onJoin }) {
           </div>
         ))}
       </div>
+
+      {rejoinPrompt && isToastDismissed && (
+        <div className="rejoin-persistent-card">
+          <div className="persistent-info">
+            <span className="persistent-icon">🔄</span>
+            <div className="persistent-text">
+              <div className="persistent-title">Active Session</div>
+              <div className="persistent-sub">Room {rejoinPrompt.roomCode}</div>
+            </div>
+          </div>
+          <button type="button" className="btn btn-primary btn-sm" onClick={confirmRejoin}>Rejoin</button>
+        </div>
+      )}
     </div>
   );
 }

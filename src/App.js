@@ -11,7 +11,7 @@ export default function App() {
 
   let content = null;
   if (game.screen === "home") {
-    content = <HomeScreen onCreate={game.createRoom} onJoin={game.goToJoin} />;
+    content = <HomeScreen onCreate={game.createRoom} onJoin={game.goToJoin} rejoinPrompt={game.rejoinPrompt} isToastDismissed={game.isToastDismissed} confirmRejoin={game.confirmRejoin} />;
   } else if (game.screen === "joining") {
     content = (
       <JoinScreen
@@ -63,7 +63,7 @@ export default function App() {
 
   return (
     <>
-      {game.rejoinPrompt && (
+      {game.rejoinPrompt && !game.isToastDismissed && (
         <div className="rejoin-toast-container">
           <div className="rejoin-toast-header">
             <span>🔄</span>
